@@ -4,7 +4,8 @@ import socket from "../services/socket";
 import "../styles/dashboard.css";
 import PlayersPage from "./PlayersPage";
 import { getPlayers } from "../services/api";
-
+import AssetsPage from "./AssetsPage";
+import PlaylistsPage from "./PlaylistsPage";
 function DashboardPage() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user"));
@@ -135,8 +136,8 @@ const [error, setError] = useState("");
 
           {active === "players" && <PlayersPage />}
           {active === "groups" && <h1>Groups (Coming soon)</h1>}
-          {active === "assets" && <h1>Assets (Coming soon)</h1>}
-          {active === "playlists" && <h1>Playlists (Coming soon)</h1>}
+          {active === "assets" && <AssetsPage />}
+          {active === "playlists" && <PlaylistsPage />}
         </div>
       </main>
     </div>

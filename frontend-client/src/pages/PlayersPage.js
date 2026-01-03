@@ -1,5 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
-import { getPlayers, registerPlayer, unregisterPlayer } from "../services/api";
+import {
+  getPlayers,
+  registerPlayer,
+  unregisterPlayer,
+  getPlaylists
+} from "../services/api";
 import socket from "../services/socket";
 import "../styles/dashboard.css";
 
@@ -7,97 +12,96 @@ function PlayersPage() {
   const user = JSON.parse(localStorage.getItem("user"));
 
   const [players, setPlayers] = useState([]);
+  const [playlists, setPlaylists] = useState([]);
+
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showRunModal, setShowRunModal] = useState(false);
 
-  // Send-to-TV states
-  const [showSendModal, setShowSendModal] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
-  const [mediaFile, setMediaFile] = useState(null);
+  const [selectedPlaylist, setSelectedPlaylist] = useState("");
 
- const [form, setForm] = useState({
-  pairingCode: "",
-  name: "",
-  timezone: "Asia/Calcutta",
-  group: "default"
-});
+  const [form, setForm] = useState({
+    pairingCode: "",
+    name: "",
+    timezone: "Asia/Calcutta",
+    group: "default"
+  });
 
+  /* ================= LOAD PLAYERS ================= */
+  const loadPlayers = useCallback(async () => {
+    if (!user) return;
+    const data = await getPlayers(user.userId);
+    setPlayers(data);
+  }, [user]);
 
-   const loadPlayers = useCallback(async () => {
-  if (!user) return;
-  const data = await getPlayers(user.userId);
-  setPlayers(data);
-}, [user]);
+  /* ================= LOAD PLAYLISTS ================= */
+  const loadPlaylists = useCallback(async () => {
+    if (!user) return;
+    const data = await getPlaylists(user.userId);
+    setPlaylists(data);
+  }, [user]);
 
-  // 🔹 Load only logged-in user's players
  useEffect(() => {
+  if (!user?.userId) return;
+
   loadPlayers();
-}, [loadPlayers]);
+  loadPlaylists();
+}, [user?.userId]);
 
-
- 
-
-
-  // 🔹 Register player
+  /* ================= REGISTER PLAYER ================= */
   const handleRegister = async () => {
-    const payload = {
-      ...form,
-      userId: user.userId
-    };
+  // 🔍 Check if pairing code already exists & paired
+  const existingPlayer = players.find(
+    (p) => p.pairing_code === form.pairingCode
+  );
 
-    const res = await registerPlayer(payload);
-    alert(res.message);
+  if (existingPlayer && existingPlayer.is_paired === 1) {
+    alert("❌ Player already registered with this pairing code");
+    return;
+  }
 
-    setShowRegisterModal(false);
-   setForm({
-  pairingCode: "",
-  name: "",
-  timezone: "Asia/Calcutta",
-  group: "default"
-});
-
-
-    loadPlayers();
+  const payload = {
+    ...form,
+    userId: user.userId
   };
 
-  // 🔹 Send media to TV
-  const handleSendMedia = async () => {
-    if (!mediaFile || !selectedPlayer) {
-      alert("Please select a media file");
+  const res = await registerPlayer(payload);
+  alert(res.message);
+
+  setShowRegisterModal(false);
+  setForm({
+    pairingCode: "",
+    name: "",
+    timezone: "Asia/Calcutta",
+    group: "default"
+  });
+
+  loadPlayers();
+};
+
+
+  /* ================= RUN PLAYLIST ================= */
+  const handleRunPlaylist = () => {
+    if (!selectedPlayer || !selectedPlaylist) {
+      alert("Select a playlist");
       return;
     }
 
-    const type = mediaFile.type.startsWith("video") ? "video" : "image";
-
-    const formData = new FormData();
-    formData.append("file", mediaFile);
-    formData.append("type", type);
-
-    const res = await fetch("http://localhost:5000/api/media/upload", {
-      method: "POST",
-      body: formData
-    });
-
-    const data = await res.json();
-
-    socket.emit("send-media", {
+    socket.emit("play-playlist", {
       pairingCode: selectedPlayer.pairing_code,
-      media: {
-        type,
-        url: `http://localhost:5000${data.media.url}`
-      }
+      playlistId: selectedPlaylist
     });
 
-    alert("Media sent to TV");
-
-    setShowSendModal(false);
-    setMediaFile(null);
+    alert("Playlist sent to TV");
+    loadPlayers();
+    setShowRunModal(false);
+    setSelectedPlaylist("");
     setSelectedPlayer(null);
   };
 
-  // 🔹 Unregister player
+  /* ================= UNREGISTER ================= */
   const handleUnregister = async (id) => {
     if (!window.confirm("Unregister this player?")) return;
-
     const res = await unregisterPlayer(id);
     alert(res.message);
     loadPlayers();
@@ -112,6 +116,7 @@ function PlayersPage() {
         </button>
       </div>
 
+      {/* ================= PLAYERS TABLE ================= */}
       <table border="1" cellPadding="10" width="100%" style={{ marginTop: "20px" }}>
         <thead>
           <tr>
@@ -119,6 +124,7 @@ function PlayersPage() {
             <th>Pairing Code</th>
             <th>Location</th>
             <th>Group</th>
+            <th>Current Playlist</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -137,12 +143,13 @@ function PlayersPage() {
                 <td>{p.pairing_code}</td>
                 <td>{p.location || "-"}</td>
                 <td>{p.group_name || "-"}</td>
+                <td>{p.current_playlist_name ? p.current_playlist_name : "—"}</td>
                 <td>{p.is_paired ? "Online" : "Offline"}</td>
                 <td>
                   <button
                     onClick={() => {
                       setSelectedPlayer(p);
-                      setShowSendModal(true);
+                      setShowRunModal(true);
                     }}
                   >
                     ▶️
@@ -158,7 +165,7 @@ function PlayersPage() {
         </tbody>
       </table>
 
-      {/* 🔹 REGISTER PLAYER MODAL */}
+      {/* ================= REGISTER MODAL ================= */}
       {showRegisterModal && (
         <div className="modal-backdrop">
           <div className="modal">
@@ -180,8 +187,6 @@ function PlayersPage() {
               }
             />
 
-            
-
             <div className="modal-actions">
               <button
                 className="secondary"
@@ -197,30 +202,33 @@ function PlayersPage() {
         </div>
       )}
 
-      {/* 🔹 SEND MEDIA MODAL */}
-      {showSendModal && (
+      {/* ================= RUN PLAYLIST MODAL ================= */}
+      {showRunModal && (
         <div className="modal-backdrop">
           <div className="modal">
-            <h2>Send Media to {selectedPlayer?.name}</h2>
+            <h2>Run Playlist on {selectedPlayer?.name}</h2>
 
-            <input
-              type="file"
-              accept="image/*,video/*"
-              onChange={(e) => setMediaFile(e.target.files[0])}
-            />
+            <select
+              value={selectedPlaylist}
+              onChange={(e) => setSelectedPlaylist(e.target.value)}
+            >
+              <option value="">Select Playlist</option>
+              {playlists.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
 
             <div className="modal-actions">
               <button
                 className="secondary"
-                onClick={() => {
-                  setShowSendModal(false);
-                  setMediaFile(null);
-                }}
+                onClick={() => setShowRunModal(false)}
               >
                 Cancel
               </button>
-              <button className="primary" onClick={handleSendMedia}>
-                Send
+              <button className="primary" onClick={handleRunPlaylist}>
+                ▶️ Run
               </button>
             </div>
           </div>

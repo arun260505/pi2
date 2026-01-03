@@ -7,7 +7,7 @@ function PairingPage() {
   const [code, setCode] = useState(null);
   const navigate = useNavigate();
 
-  // Generate pairing code ONCE
+  /* ================= GENERATE / LOAD PAIRING CODE ================= */
   useEffect(() => {
     const savedCode = localStorage.getItem("pairingCode");
 
@@ -26,16 +26,17 @@ function PairingPage() {
     });
   }, []);
 
-  // 🔥 THIS IS THE KEY CHANGE
+  /* ================= SWITCH TO DISPLAY ON PLAYLIST ================= */
   useEffect(() => {
-    socket.on("play-media", (media) => {
-      console.log("MEDIA RECEIVED ON PAIRING PAGE:", media);
+    const handler = ({ playlistId }) => {
+      console.log("START PLAYLIST RECEIVED:", playlistId);
 
-      // Move to DisplayPage ONLY when media arrives
-      navigate("/display", { state: { media } });
-    });
+      // move to display screen
+      navigate("/display");
+    };
 
-    return () => socket.off("play-media");
+    socket.on("start-playlist", handler);
+    return () => socket.off("start-playlist", handler);
   }, [navigate]);
 
   return (
@@ -53,7 +54,7 @@ function PairingPage() {
     >
       <h1>PAIR THIS TV</h1>
       <h2>{code ?? "Generating code..."}</h2>
-      <p>Enter this code in the client dashboard</p>
+      <p>Enter this code in dashboard</p>
     </div>
   );
 }

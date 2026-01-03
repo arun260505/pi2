@@ -3,6 +3,8 @@ const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 const authRoutes = require("./routes/authRoutes");
+const assetRoutes = require("./routes/assetRoutes");
+const playlistRoutes = require("./routes/playlistRoutes");
 
 const db = require("./models/db");
 const displayRoutes = require("./routes/displayRoutes");
@@ -31,6 +33,8 @@ app.use((req, res, next) => {
 app.use("/api/display", displayRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/assets", assetRoutes);
+app.use("/api/playlists", playlistRoutes);
 
 // Static uploads
 app.use("/uploads", express.static("src/uploads"));
@@ -51,11 +55,30 @@ io.on("connection", (socket) => {
   });
 
   // Client sends media using pairing code
-  socket.on("send-media", ({ pairingCode, media }) => {
+  /*socket.on("send-media", ({ pairingCode, media }) => {
     io.to(pairingCode).emit("play-media", media);
     console.log(`Media sent to TV with code ${pairingCode}`);
-  });
+  });*/
+  socket.on("play-playlist", async ({ pairingCode, playlistId }) => {
+  try {
+    // 1️⃣ Save current playlist to DB
+    db.query(
+      "UPDATE displays SET current_playlist_id = ? WHERE pairing_code = ?",
+      [playlistId, pairingCode]
+    );
 
+    // 2️⃣ Send playlist to TV
+    io.to(pairingCode).emit("start-playlist", {
+      playlistId
+    });
+
+    console.log(
+      `Playlist ${playlistId} started on TV ${pairingCode}`
+    );
+  } catch (err) {
+    console.error("Failed to start playlist:", err);
+  }
+});
   socket.on("disconnect", () => {
     console.log("Socket disconnected:", socket.id);
   });
