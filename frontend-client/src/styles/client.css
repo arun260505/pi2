@@ -1,0 +1,19 @@
+.client-screen {
+  min-height: 100vh;
+  padding: 40px;
+  text-align: center;
+}
+
+input {
+  padding: 10px;
+  margin: 10px;
+}
+
+button {
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.error {
+  color: red;
+}
